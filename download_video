@@ -1,0 +1,17 @@
+#!/bin/bash
+# Downloads YouTube videos at high resolution with metadata, chapters, and subtitles.
+#YT_VIDEO_FOLDER='/home/arch/External/Videos/Youtube'
+set -e
+
+#cd $YT_VIDEO_FOLDER
+
+yt-dlp \
+  -f "bestvideo[height<=1440]+bestaudio/best[height<=1440]" \
+  --merge-output-format mp4 \
+  --concurrent-fragments 10 \
+  --embed-metadata \
+  --embed-chapters \
+  --embed-thumbnail \
+  --sponsorblock-remove all \
+  --embed-subs \
+  "$@"

@@ -1,0 +1,4 @@
+#!/usr/bin/env python
+# Generates and prints a random UUID version 4.
+from uuid import uuid4
+print(uuid4())

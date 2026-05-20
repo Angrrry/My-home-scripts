@@ -1,0 +1,6 @@
+#!/bin/bash
+# Extracts frames from a video where scene changes are detected using FFmpeg.
+set -e
+
+ffmpeg -i "$1" -map 0:0 -vf "select='gt(scene,0.2)',showinfo,metadata=print:file=scenes.txt" \
+  -fps_mode vfr -vsync 0 -frame_pts 1 scene_%05d.jpg

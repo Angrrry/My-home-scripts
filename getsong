@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+# Downloads best quality audio from a YouTube video and saves it with the video title.
+set -e
+set -u
+set -o pipefail
+
+exec yt-dlp -f bestaudio -o '%(title)s.%(ext)s' "$@"

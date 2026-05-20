@@ -1,0 +1,11 @@
+#!/bin/bash
+set -e
+set -u
+set -o pipefail
+
+insanely-fast-whisper-cli transcribe  \
+  --batch-size 24 \
+  --dtype float16 \
+  --model openai/whisper-large-v3 \
+  --export-format txt,srt \
+  "$@"

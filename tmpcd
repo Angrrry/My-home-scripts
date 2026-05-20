@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+# Creates a random temporary directory under /tmp and enters it.
+set -e
+set -u
+set -o pipefail
+
+dir="$(mktemp -d /tmp/tmpcd.XXXXXX)"
+echo "$dir"
+
+if [ "${BASH_SOURCE[0]}" != "$0" ]; then
+  cd "$dir"
+else
+  cd "$dir"
+  exec "${SHELL:-/bin/sh}"
+fi

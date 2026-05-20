@@ -1,0 +1,59 @@
+#!/bin/bash
+
+MODEL="gemini-flash-latest"
+
+while getopts "m:" opt; do
+  case $opt in
+    m) MODEL="gemini-2.5-$OPTARG" ;;
+    \?) echo "Invalid option" >&2; exit 1 ;;
+  esac
+done
+shift $((OPTIND -1))
+
+GEMINI_API_KEY=$(secret-tool lookup service gemini-api user "$USER")
+if [ -z "$GEMINI_API_KEY" ]; then
+  echo "Error: GEMINI_API_KEY not found in secret-tool." >&2
+  exit 1
+fi
+
+if [ "$#" -gt 0 ]; then
+  PROMPT="$*"
+elif [ ! -t 0 ]; then
+  PROMPT=$(cat)
+else
+  echo "Usage: ask [-m pro|lite|flash] <prompt>" >&2
+  exit 1
+fi
+
+API_RESPONSE=$(printf "%s" "$PROMPT" |
+  jq -Rs '{
+    contents: [
+      {
+        parts: [
+          {
+            text: .
+          }
+        ]
+      }
+    ]
+  }' |
+  curl -s "https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent" \
+    -H "Content-Type: application/json" \
+    -H "X-goog-api-key: ${GEMINI_API_KEY}" \
+    -X POST \
+    -d @-)
+
+ERROR_MESSAGE=$(printf "%s" "$API_RESPONSE" | jq -r '.error.message // empty')
+if [ -n "$ERROR_MESSAGE" ]; then
+  echo "Gemini API error: $ERROR_MESSAGE" >&2
+  exit 1
+fi
+
+OUTPUT=$(printf "%s" "$API_RESPONSE" | jq -r '.candidates[0].content.parts[0].text // empty')
+
+if [ -z "$OUTPUT" ]; then
+  echo "Gemini API error: empty response or unexpected response format." >&2
+  exit 1
+fi
+
+printf "%s\n" "$OUTPUT"

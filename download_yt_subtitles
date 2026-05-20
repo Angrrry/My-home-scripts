@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+# Downloads auto-generated YouTube subtitles in VTT format for a given video and language.
+set -euo pipefail
+
+if [ -z "$1" ]; then
+    echo "Usage: $0 <youtube_video_url> [language_code, e.g., en, ru]" >&2
+    exit 1
+fi
+
+VIDEO_URL="$1"
+LANGUAGE="${2:-en}" # Use provided language or default to 'en'
+
+TMP_DIR=$(mktemp -d)
+# The --quiet flag suppresses yt-dlp's own progress messages.
+yt-dlp --skip-download --write-auto-sub --sub-langs "$LANGUAGE" --convert-subs vtt --output "$TMP_DIR/%(id)s" "$VIDEO_URL" --no-warnings --quiet
+
+# Find the subtitle file, which will have the language code in its name.
+SUB_FILE=$(find "$TMP_DIR" -name "*.${LANGUAGE}.vtt" | head -n 1)
+
+if [ -n "$SUB_FILE" ] && [ -f "$SUB_FILE" ]; then
+    cat "$SUB_FILE"
+fi
+
+rm -rf "$TMP_DIR"

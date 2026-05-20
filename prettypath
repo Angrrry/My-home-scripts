@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+# Prints the system PATH with each directory on a new line.
+set -e
+set -u
+
+echo "$PATH" | sed 's/:/\
+/g'

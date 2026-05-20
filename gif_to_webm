@@ -1,0 +1,27 @@
+#!/bin/bash
+
+# Скрипт для конвертации одного GIF в WebM (VP9)
+# Использование: ./gif_to_webm input.gif
+
+if [[ $# -eq 0 ]]; then
+    echo "Использование: $0 file.gif"
+    exit 1
+fi
+
+INPUT="$1"
+OUTPUT="${INPUT%.*}.webm"
+
+if [[ ! -f "$INPUT" ]]; then
+    echo "Ошибка: файл '$INPUT' не найден."
+    exit 1
+fi
+
+ffmpeg -y -i "$INPUT" \
+       -c:v libvpx-vp9 \
+       -crf 50 -b:v 0 \
+       -an \
+       -pix_fmt yuv420p \
+       -vf "pad=ceil(iw/2)*2:ceil(ih/2)*2" \
+       "$OUTPUT"
+
+echo "Готово! Файл сохранён как: $OUTPUT"

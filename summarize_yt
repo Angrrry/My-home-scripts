@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+# Downloads YouTube subtitles and generates a summary using Gemini AI.
+set -euo pipefail
+
+if [ -z "$1" ]; then
+    echo "Usage: $0 <youtube_video_url> [language_code, e.g., en, ru]"
+    exit 1
+fi
+
+VIDEO_URL="$1"
+LANGUAGE="${2:-en}" # Use provided language or default to 'en'
+
+echo "Downloading and extracting subtitles for $VIDEO_URL in language '$LANGUAGE'..."
+
+# Strip HTML tags, timestamps, and empty lines from VTT file
+SUBTITLE_TEXT=$(
+    download_yt_subtitles "$VIDEO_URL" "$LANGUAGE" |
+    grep -vE '^(WEBVTT|Kind:|Language:|[0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9]{3} -->)' |
+    sed 's/<[^>]*>//g' | # Remove HTML tags
+    grep -vE '^\s*$' | # Remove empty lines
+    tr '\n' ' ' | # Convert newlines to spaces
+    sed 's/  */ /g' | # Replace multiple spaces with a single space
+    sed 's/^ //g' # Remove leading space
+)
+
+if [ -z "$SUBTITLE_TEXT" ]; then
+    echo "Error: No '${LANGUAGE}' subtitles found or could not extract text for $VIDEO_URL."
+    exit 1
+fi
+
+echo "Summarizing using 'ask' command..."
+# Pipe the subtitle text to the 'ask' command for summarization
+printf "Summarize this in %s language. Here is the text: %s" "$LANGUAGE" "$SUBTITLE_TEXT" | ask

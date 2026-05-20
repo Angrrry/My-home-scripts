@@ -1,0 +1,20 @@
+#!/bin/bash
+# Downloads YouTube audio as Opus files with podcast-optimized metadata and thumbnails.
+#PODCASTS_FOLDER='/home/arch/External/Podcasts'
+set -e
+
+#cd $PODCASTS_FOLDER
+
+yt-dlp -x \
+    --audio-format opus \
+    --embed-metadata \
+    --embed-chapters \
+    --embed-thumbnail \
+    --sponsorblock-remove all \
+    --parse-metadata "uploader:%(meta_artist)s" \
+    --parse-metadata "title:%(meta_title)s" \
+    -o "%(title)s.%(ext)s" \
+    --convert-thumbnails jpg \
+    --ppa 'ThumbnailsConvertor+FFmpeg:-vf "crop=640:640"' $@
+
+set +e

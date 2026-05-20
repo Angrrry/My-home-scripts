@@ -1,0 +1,16 @@
+#!/bin/bash
+# Displays the content of the command executable found in PATH.
+
+if [ -z "$1" ]; then
+    echo "Usage: catwhich <command>"
+    exit 1
+fi
+
+FILE_PATH=$(which "$1")
+
+if [ -n "$FILE_PATH" ]; then
+    cat "$FILE_PATH"
+else
+    echo "Error: '$1' not found in PATH"
+    exit 1
+fi

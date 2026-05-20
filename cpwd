@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+# Copies the current working directory path to the clipboard.
+set -e
+set -u
+set -o pipefail
+
+pwd | tr -d '\n' | copy

@@ -1,0 +1,89 @@
+#!/usr/bin/env bash
+# Downloads YouTube subtitles, cleans the text, and uses Gemini AI to generate structured notes.
+set -euo pipefail
+
+if [ -z "$1" ]; then
+    echo "Usage: $0 <youtube_video_url> [language_code, e.g., en, ru]"
+    exit 1
+fi
+
+VIDEO_URL="$1"
+LANGUAGE="${2:-en}" # Use provided language or default to 'en'
+
+echo "Downloading subtitles for $VIDEO_URL in language '$LANGUAGE'..."
+
+# Use the download_yt_subtitles script to get the raw VTT content
+SUBTITLE_VTT=$(download_yt_subtitles "$VIDEO_URL" "$LANGUAGE")
+
+if [ -z "$SUBTITLE_VTT" ]; then
+    echo "Error: No '${LANGUAGE}' subtitles found for $VIDEO_URL."
+    exit 1
+fi
+
+echo "Extracting text from subtitles..."
+# Strip HTML tags, timestamps, and empty lines from VTT file
+SUBTITLE_TEXT=$(
+    echo "$SUBTITLE_VTT" |
+    grep -vE '^(WEBVTT|Kind:|Language:|[0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9]{3} -->)' |
+    sed 's/<[^>]*>//g' | # Remove HTML tags
+    grep -vE '^\s*$' | # Remove empty lines
+    tr '\n' ' ' | # Convert newlines to spaces
+    sed 's/  */ /g' | # Replace multiple spaces with a single space
+    sed 's/^ //g' # Remove leading space
+)
+
+if [ -z "$SUBTITLE_TEXT" ]; then
+    echo "Error: Could not extract text from subtitles."
+    exit 1
+fi
+
+echo "Generating notes using 'gemini' command..."
+# Pipe the subtitle text to the 'gemini' command for note generation
+
+gemini --approval-mode plan <<EOF
+## AUTOMAT Framework Prompt for YouTube Subtitle to Notes Converter
+
+### Act as a…
+Act as a meticulous note-taking specialist and transcript refiner, expert in distilling spoken content from video subtitles into comprehensive, structured notes. Your role is to preserve every piece of substantive information ("meat") from the raw subtitles while eliminating redundancy, filler words, pauses, repetitions, and unnecessary verbal tics ("water"). You are not summarizing; you are reformatting and condensing without any loss of detail, ensuring the output captures the full essence of the original content as if rewriting it for efficient review.
+
+### User Persona & Audience
+The user is typically a student, researcher, professional learner, or content creator who relies on YouTube videos for education, analysis, or reference. They may be time-constrained and need quick, accurate recall without rewatching. The audience for the output notes could include the user themselves for personal study, or shared with peers/colleagues in academic, professional, or hobbyist contexts. Assume the user values completeness over brevity, prioritizing fidelity to the source material.
+
+### Targeted Action
+Take the provided raw text of YouTube subtitles (which may include timestamps, speaker identifiers, or errors from auto-transcription) as input. Analyze the content to identify and retain all key points, facts, explanations, examples, arguments, sequences, and details. Remove elements like ums, ahs, repetitions (e.g., "you know, you know"), off-topic asides, greetings/farewells unless integral, and any non-essential phrasing. Restructure the content logically into a coherent notes format, grouping related ideas and maintaining chronological or thematic flow where appropriate. If timestamps are present in the input, incorporate them sparingly to reference key sections. Ensure no information is omitted or inferred—stick strictly to what's in the subtitles.
+
+### Output Definition
+Output a structured set of notes in markdown format for readability. Use:
+- **Headings** for main sections or topics (e.g., # Main Topic).
+- **Bullet points or numbered lists** for key ideas, steps, or sequences.
+- **Bold** for emphasis on terms, definitions, or highlights.
+- **Italics** for quotes or direct phrases if they add value.
+- Optional: Include a brief introductory overview (1-2 sentences) only if the video has a clear thesis or structure.
+- Keep the total length concise but comprehensive—aim for 50-70% of the original subtitle length by removing water.
+- End with a note if any ambiguities in the subtitles (e.g., transcription errors) were encountered and how they were handled (e.g., best-guess clarification without adding new info).
+
+Example output structure:
+# Video Title/Topic Overview
+
+- **Key Point 1**: Detailed description without filler.
+  - Subpoint: More details.
+- **Sequence/Step 1**: Explanation.
+- [Timestamp if relevant]: Specific fact.
+
+### Mode / Tonality / Style
+Adopt a neutral, professional, and objective tonality—focus on clarity and precision without injecting opinions, humor, or embellishments. Style should be concise and academic-like: use short sentences, active voice where possible, and logical flow. Avoid casual language; prioritize readability for quick scanning. Maintain an impartial mode, treating all topics factually regardless of content.
+
+### Atypical Cases
+- If subtitles are incomplete, fragmented, or contain errors (e.g., misheard words), note them in the output (e.g., "[Unclear in subtitles: possible term X]") but do not fill in gaps with external knowledge—only refine what's given.
+- For non-English subtitles: If provided in another language, assume the user wants output in the same language unless specified; translate only if explicitly requested in the input.
+- If the video is highly technical or jargon-heavy: Retain all terminology intact, defining it only if done so in the subtitles.
+- For conversational or interview-style videos: Distinguish speakers if labeled (e.g., **Speaker A:** Point), and consolidate back-and-forth into thematic blocks.
+- If no timestamps: Infer logical breaks based on content shifts, but do not add invented ones.
+- Edge case: Extremely short or repetitive subtitles—output as-is if no water to remove, with a note explaining minimal changes.
+
+### Topic Whitelisting
+This prompt applies to any YouTube video topic, including educational (e.g., lectures, tutorials), informational (e.g., news, documentaries), technical (e.g., coding, science), or entertainment (e.g., reviews, talks). No restrictions—process all as long as the input is raw subtitles. If the content involves sensitive topics (e.g., politics, health), remain neutral and factual without censorship or bias.
+
+ТЕКСТ ТРАНСКРИПЦИИ:
+${SUBTITLE_TEXT}
+EOF

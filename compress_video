@@ -1,0 +1,48 @@
+#!/bin/bash
+# Compresses video files using FFmpeg with platform-specific optimizations.
+set -e
+
+if [[ $# -eq 0 ]]; then
+    echo "Использование: $0 file.mp4"
+    exit 1
+fi
+
+INPUT="$1"
+TARGET_FPS=24
+
+if [[ ! -f "$INPUT" ]]; then
+    echo "Ошибка: файл '$INPUT' не найден."
+    exit 1
+fi
+
+# Вызначаем аперацыйную сістэму
+OS_TYPE=$(uname -s)
+
+if [ "$OS_TYPE" == "Darwin" ]; then
+    echo "--- Выяўлены macOS. Выкарыстоўваем працэсарны SVT-AV1 ---"
+    OUTPUT="${INPUT%.*}_compressed.mp4"
+    # Ваш арыгінальны код (ідэальна для якасці/памеру на Mac)
+    ffmpeg -y -i "$INPUT" \
+      -vf "scale=640:-2,fps=$TARGET_FPS" \
+      -c:v libsvtav1 -preset 4 -crf 44 \
+      -c:a libopus -b:a 32k \
+      -movflags +faststart "$OUTPUT"
+
+else
+    echo "--- Выяўлены Linux/Іншае. Спрабуем апаратнае паскарэнне AMD (VAAPI) ---"
+    OUTPUT="${INPUT%.*}_compressed.webm"
+#    ffmpeg -hwaccel vaapi -hwaccel_device /dev/dri/renderD128 -hwaccel_output_format vaapi \
+#      -i "$INPUT" \
+#      -vf "scale_vaapi=640:-2,fps=$TARGET_FPS,format=vaapi|nv12" \
+#      -c:v hevc_vaapi -qp 33 -compression_level 7 -bf 2 \
+#      -c:a libopus -b:a 32k \
+#      -movflags +faststart "$OUTPUT"
+    ffmpeg -y -i "$INPUT" \
+    -vf "scale=640:-2,fps=$TARGET_FPS" \
+    -c:v libvpx-vp9 -crf 45 -b:v 0 \
+    -deadline best -cpu-used 0 \
+    -c:a libopus -b:a 64k \
+    "$OUTPUT"
+fi
+
+echo "Гатова! Файл захаваны як: $OUTPUT"
