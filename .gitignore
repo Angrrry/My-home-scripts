@@ -1,0 +1,28 @@
+# Python cache
+__pycache__/
+*.py[cod]
+
+# Local tool/editor metadata
+.codex
+.directory
+.DS_Store
+Thumbs.db
+*~
+*.swp
+*.swo
+
+# Logs and runtime output
+*.log
+nohup.out
+
+# Local environments and secrets
+.env
+.env.*
+!.env.example
+.venv/
+venv/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
