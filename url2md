@@ -1,0 +1,78 @@
+#!/usr/bin/env python3
+import shutil
+import subprocess
+import sys
+import urllib.error
+import urllib.request
+
+
+USAGE = "Usage: url2md <url>"
+REQUEST_HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/125.0 Safari/537.36"
+    ),
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "Accept-Language": "be,en;q=0.9,ru;q=0.8",
+}
+
+
+def fetch(url):
+    request = urllib.request.Request(url, headers=REQUEST_HEADERS)
+    with urllib.request.urlopen(request, timeout=30) as response:
+        return response.read()
+
+
+def html_to_markdown(html):
+    pandoc = shutil.which("pandoc")
+    if pandoc is None:
+        raise RuntimeError("pandoc not found in PATH")
+
+    result = subprocess.run(
+        [
+            pandoc,
+            "-f",
+            "html",
+            "-t",
+            "markdown_strict-raw_html+pipe_tables+backtick_code_blocks+fenced_code_blocks",
+            "--wrap=none",
+        ],
+        input=html,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    if result.returncode != 0:
+        message = result.stderr.decode("utf-8", errors="replace").strip()
+        raise RuntimeError(f"pandoc failed: {message or 'unknown error'}")
+
+    return result.stdout
+
+
+def main(argv):
+    if len(argv) != 2:
+        print(USAGE, file=sys.stderr)
+        return 2
+
+    url = argv[1]
+    try:
+        html = fetch(url)
+        markdown = html_to_markdown(html)
+    except urllib.error.HTTPError as error:
+        print(f"Error: HTTP {error.code} while fetching {url}", file=sys.stderr)
+        return 1
+    except urllib.error.URLError as error:
+        print(f"Error: could not fetch {url}: {error.reason}", file=sys.stderr)
+        return 1
+    except TimeoutError:
+        print(f"Error: timed out while fetching {url}", file=sys.stderr)
+        return 1
+    except RuntimeError as error:
+        print(f"Error: {error}", file=sys.stderr)
+        return 1
+
+    sys.stdout.buffer.write(markdown)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main(sys.argv))

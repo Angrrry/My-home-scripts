@@ -1,0 +1,65 @@
+#!/bin/bash
+
+# Fixed model
+MODEL="openrouter/free"
+
+# Get API key
+OPENROUTER_API_KEY=$(secret-tool lookup service openrouter-api user "$USER")
+if [ -z "$OPENROUTER_API_KEY" ]; then
+  echo "Error: openrouter-api secret not found in secret-tool." >&2
+  exit 1
+fi
+
+# Get prompt
+if [ "$#" -gt 0 ]; then
+  PROMPT="$*"
+elif [ ! -t 0 ]; then
+  PROMPT=$(cat)
+else
+  echo "Usage: ask_openrouter <prompt>" >&2
+  exit 1
+fi
+
+# Prepare and send request
+API_RESPONSE=$(printf -- "%s" "$PROMPT" |
+  jq -Rs --arg model "$MODEL" '{
+    model: $model,
+    messages: [
+      {
+        role: "user",
+        content: .
+      }
+    ]
+  }' |
+  curl -s https://openrouter.ai/api/v1/chat/completions \
+    -H "Content-Type: application/json" \
+    -H "Authorization: Bearer ${OPENROUTER_API_KEY}" \
+    -X POST \
+    -d @-)
+
+# Handle errors
+ERROR_MESSAGE=$(printf -- "%s" "$API_RESPONSE" | jq -r '.error.message // .error // empty')
+if [ -n "$ERROR_MESSAGE" ] && [ "$ERROR_MESSAGE" != "null" ]; then
+  echo "OpenRouter API error: $ERROR_MESSAGE" >&2
+  exit 1
+fi
+
+# Extract output
+OUTPUT=$(printf -- "%s" "$API_RESPONSE" | jq -r '.choices[0].message.content // empty')
+
+if [ -z "$OUTPUT" ]; then
+  if printf -- "%s" "$API_RESPONSE" | jq -e '.choices' >/dev/null 2>&1; then
+    REFUSAL=$(printf -- "%s" "$API_RESPONSE" | jq -r '.choices[0].message.refusal // empty')
+    if [ -n "$REFUSAL" ] && [ "$REFUSAL" != "null" ]; then
+      echo "Model refusal: $REFUSAL" >&2
+    else
+      echo "OpenRouter API error: empty response content." >&2
+    fi
+  else
+    echo "OpenRouter API error: unexpected response format." >&2
+    echo "Full response: $API_RESPONSE" >&2
+  fi
+  exit 1
+fi
+
+printf "%s\n" "$OUTPUT"

@@ -1,0 +1,157 @@
+#!/usr/bin/env bash
+# Prints reusable prompts by key.
+set -euo pipefail
+
+usage() {
+  cat >&2 <<'EOF'
+Usage:
+  prompt <key>
+  prompt --list
+  prompt completion zsh
+
+Examples:
+  prompt summarize
+  prompt review
+  prompt translate-be
+  eval "$(prompt completion zsh)"
+
+Add new prompts by adding a key to list_prompts and a matching case block in
+print_prompt. Shell completion reads the keys from this script.
+EOF
+}
+
+list_prompts() {
+  cat <<'EOF'
+summarize
+review
+rewrite
+translate-be
+explain-code
+commit-message
+EOF
+}
+
+print_prompt() {
+  case "$1" in
+    summarize)
+      cat <<'EOF'
+Summarize the text below clearly and concisely.
+
+Focus on:
+- the main point
+- key supporting details
+- decisions, risks, or action items if present
+
+Use short bullets. Do not add information that is not in the text.
+EOF
+      ;;
+
+    review)
+      cat <<'EOF'
+Review the following text or code critically.
+
+Prioritize:
+- correctness issues
+- unclear assumptions
+- missing edge cases
+- concrete improvements
+
+Lead with the most important findings. Keep style comments secondary.
+EOF
+      ;;
+
+    rewrite)
+      cat <<'EOF'
+Rewrite the following text to be clearer, tighter, and more natural.
+
+Preserve the meaning. Remove filler. Keep the tone direct and practical.
+EOF
+      ;;
+
+    translate-be)
+      cat <<'EOF'
+Translate the following text into natural Belarusian.
+
+Preserve meaning and tone. Avoid overly literal phrasing.
+EOF
+      ;;
+
+    explain-code)
+      cat <<'EOF'
+Explain the following code.
+
+Cover:
+- what it does
+- how the main parts work
+- important assumptions or edge cases
+- anything risky or surprising
+
+Keep the explanation practical and grounded in the code.
+EOF
+      ;;
+
+    commit-message)
+      cat <<'EOF'
+Write a concise Git commit message for the following change.
+
+Use:
+- a short imperative subject line
+- a brief body only if it adds useful context
+
+Do not mention implementation details unless they matter to the reader.
+EOF
+      ;;
+
+    *)
+      echo "Unknown prompt: $1" >&2
+      echo >&2
+      echo "Available prompts:" >&2
+      list_prompts >&2
+      exit 1
+      ;;
+  esac
+}
+
+print_zsh_completion() {
+  cat <<'EOF'
+_prompt_completion() {
+  local -a prompts
+  prompts=("${(@f)$(prompt --list 2>/dev/null)}")
+
+  _describe 'prompt' prompts
+}
+
+compdef _prompt_completion prompt
+EOF
+}
+
+if [[ $# -eq 2 && "$1" == "completion" ]]; then
+  case "$2" in
+    zsh)
+      print_zsh_completion
+      exit 0
+      ;;
+    *)
+      echo "Unsupported shell: $2" >&2
+      echo "Supported shells: zsh" >&2
+      exit 1
+      ;;
+  esac
+fi
+
+if [[ $# -ne 1 ]]; then
+  usage
+  exit 1
+fi
+
+case "$1" in
+  -h|--help)
+    usage
+    ;;
+  -l|--list|list)
+    list_prompts
+    ;;
+  *)
+    print_prompt "$1"
+    ;;
+esac
