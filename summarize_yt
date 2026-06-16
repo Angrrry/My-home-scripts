@@ -9,6 +9,7 @@ fi
 
 VIDEO_URL="$1"
 LANGUAGE="${2:-en}" # Use provided language or default to 'en'
+SUMMARY_LANGUAGE="Belarusian"
 
 echo "Downloading and extracting subtitles for $VIDEO_URL in language '$LANGUAGE'..."
 
@@ -30,4 +31,4 @@ fi
 
 echo "Summarizing using 'ask' command..."
 # Pipe the subtitle text to the 'ask' command for summarization
-printf "Summarize this in %s language. Here is the text: %s" "$LANGUAGE" "$SUBTITLE_TEXT" | ask
+printf "Summarize this in %s language. Here is the text: %s" "$SUMMARY_LANGUAGE" "$SUBTITLE_TEXT" | ask
