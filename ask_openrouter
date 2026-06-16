@@ -1,65 +1,106 @@
 #!/bin/bash
 
-# Fixed model
-MODEL="openrouter/free"
+# Default model
+DEFAULT_MODEL="openrouter/free"
 
-# Get API key
-OPENROUTER_API_KEY=$(secret-tool lookup service openrouter-api user "$USER")
-if [ -z "$OPENROUTER_API_KEY" ]; then
-  echo "Error: openrouter-api secret not found in secret-tool." >&2
-  exit 1
-fi
-
-# Get prompt
-if [ "$#" -gt 0 ]; then
-  PROMPT="$*"
-elif [ ! -t 0 ]; then
-  PROMPT=$(cat)
-else
-  echo "Usage: ask_openrouter <prompt>" >&2
-  exit 1
-fi
-
-# Prepare and send request
-API_RESPONSE=$(printf -- "%s" "$PROMPT" |
-  jq -Rs --arg model "$MODEL" '{
-    model: $model,
-    messages: [
-      {
-        role: "user",
-        content: .
-      }
-    ]
-  }' |
-  curl -s https://openrouter.ai/api/v1/chat/completions \
-    -H "Content-Type: application/json" \
-    -H "Authorization: Bearer ${OPENROUTER_API_KEY}" \
-    -X POST \
-    -d @-)
-
-# Handle errors
-ERROR_MESSAGE=$(printf -- "%s" "$API_RESPONSE" | jq -r '.error.message // .error // empty')
-if [ -n "$ERROR_MESSAGE" ] && [ "$ERROR_MESSAGE" != "null" ]; then
-  echo "OpenRouter API error: $ERROR_MESSAGE" >&2
-  exit 1
-fi
-
-# Extract output
-OUTPUT=$(printf -- "%s" "$API_RESPONSE" | jq -r '.choices[0].message.content // empty')
-
-if [ -z "$OUTPUT" ]; then
-  if printf -- "%s" "$API_RESPONSE" | jq -e '.choices' >/dev/null 2>&1; then
-    REFUSAL=$(printf -- "%s" "$API_RESPONSE" | jq -r '.choices[0].message.refusal // empty')
-    if [ -n "$REFUSAL" ] && [ "$REFUSAL" != "null" ]; then
-      echo "Model refusal: $REFUSAL" >&2
-    else
-      echo "OpenRouter API error: empty response content." >&2
-    fi
-  else
-    echo "OpenRouter API error: unexpected response format." >&2
-    echo "Full response: $API_RESPONSE" >&2
+get_api_key() {
+  local api_key
+  api_key=$(secret-tool lookup service openrouter-api user "$USER")
+  if [ -z "$api_key" ]; then
+    echo "Error: openrouter-api secret not found in secret-tool." >&2
+    return 1
   fi
-  exit 1
-fi
+  echo "$api_key"
+}
 
-printf "%s\n" "$OUTPUT"
+send_request() {
+  local prompt="$1"
+  local api_key="$2"
+  local model="$3"
+
+  printf -- "%s" "$prompt" |
+    jq -Rs --arg model "$model" '{
+      model: $model,
+      messages: [
+        {
+          role: "user",
+          content: .
+        }
+      ]
+    }' |
+    curl -s https://openrouter.ai/api/v1/chat/completions \
+      -H "Content-Type: application/json" \
+      -H "Authorization: Bearer ${api_key}" \
+      -X POST \
+      -d @-
+}
+
+parse_response() {
+  local api_response="$1"
+  local error_message
+  local output
+  local refusal
+
+  error_message=$(printf -- "%s" "$api_response" | jq -r '.error.message // .error // empty')
+  if [ -n "$error_message" ] && [ "$error_message" != "null" ]; then
+    echo "OpenRouter API error: $error_message" >&2
+    return 1
+  fi
+
+  output=$(printf -- "%s" "$api_response" | jq -r '.choices[0].message.content // empty')
+
+  if [ -z "$output" ]; then
+    if printf -- "%s" "$api_response" | jq -e '.choices' >/dev/null 2>&1; then
+      refusal=$(printf -- "%s" "$api_response" | jq -r '.choices[0].message.refusal // empty')
+      if [ -n "$refusal" ] && [ "$refusal" != "null" ]; then
+        echo "Model refusal: $refusal" >&2
+      else
+        echo "OpenRouter API error: empty response content." >&2
+      fi
+    else
+      echo "OpenRouter API error: unexpected response format." >&2
+      echo "Full response: $api_response" >&2
+    fi
+    return 1
+  fi
+
+  printf "%s\n" "$output"
+}
+
+main() {
+  local api_key
+  local model="$DEFAULT_MODEL"
+  local prompt
+  local api_response
+
+  # Parse arguments
+  while getopts "m:" opt; do
+    case $opt in
+      m)
+        model="$OPTARG"
+        ;;
+      *)
+        echo "Usage: ask_openrouter [-m model] <prompt>" >&2
+        exit 1
+        ;;
+    esac
+  done
+  shift $((OPTIND - 1))
+
+  # Get prompt from remaining arguments or stdin
+  if [ "$#" -gt 0 ]; then
+    prompt="$*"
+  elif [ ! -t 0 ]; then
+    prompt=$(cat)
+  else
+    echo "Usage: ask_openrouter [-m model] <prompt>" >&2
+    exit 1
+  fi
+
+  api_key=$(get_api_key) || exit 1
+  api_response=$(send_request "$prompt" "$api_key" "$model") || exit 1
+
+  parse_response "$api_response" || exit 1
+}
+
+main "$@"
